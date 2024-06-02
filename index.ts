@@ -43,3 +43,52 @@ for (const [index, channel] of channels.entries()) {
 
 Deno.writeTextFileSync("generated/Megogo.m3u8", playlist);
 console.log("[Playlist] Done");
+
+const since = Date.now() / 1000;
+const till = since + 28800; // 28800 = 8 * 60 * 60
+
+let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n';
+
+for (const [index, channel] of channels.entries()) {
+  console.log(
+    `[Epg] Generating EPG for channel ${index + 1}/${channels.length}`,
+  );
+
+  const epgUrl = await buildURL("epg", {
+    channel_id: channel.id.toString(),
+    from: since.toString().replace(/\..+/, ""),
+    to: till.toString().replace(/\..+/, ""),
+  });
+
+  console.log(epgUrl);
+  const epgResponse = await ((await fetch(epgUrl)).json());
+
+  let channelData = `<channel id="${channel.title}">\n`;
+
+  channelData += `<display-name>${channel.title}</name>\n`;
+  channelData += `<icon src="${channel.image.original}" />\n`;
+
+  channelData += "</channel>\n";
+  xml += channelData;
+
+  for (const program of epgResponse.data[0].programs) {
+    const start = new Date(program.start).toISOString().replaceAll("-", "")
+      .replaceAll("T", "").replaceAll(":", "").replace(/\..+/, "");
+
+    const end = new Date(program.end).toISOString().replaceAll("-", "")
+      .replaceAll("T", "").replaceAll(":", "").replace(/\..+/, "");
+
+    let programData =
+      `<programme start="${start}" stop="${end}" channel="${channel.title}">\n`;
+
+    programData += `<title>${program.title}</title>\n`;
+    programData += `<icon src="${program.pictures.original}" />\n`;
+
+    programData += "</programme>\n";
+    xml += programData;
+  }
+}
+
+xml += "</tv>";
+Deno.writeTextFileSync("./generated/Megogo.xml", xml);
+console.log("[Epg] Done");
